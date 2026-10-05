@@ -206,7 +206,7 @@
         </div>
     </div>
 
-    <script>
+   <script>
         const trainWrapper = document.getElementById('trainWrapper');
         const motorcycle = document.getElementById('motorcycle');
         
@@ -218,23 +218,44 @@
         const CONTAINER_WIDTH = 700;
         const MAX_SPEED_STEP = 3.88; 
 
-        // Dynamic car width calculation to prevent layout shifts
+        // Safe fallback width
         let carWidth = 216; 
 
         function measureCarWidth() {
             const firstCar = trainWrapper.querySelector('.train-car');
-            if (firstCar) {
-                const computedMarginRight = parseFloat(window.getComputedStyle(firstCar).marginRight) || -15;
-                carWidth = firstCar.getBoundingClientRect().width + computedMarginRight;
+            if (!firstCar) return;
+
+            let measuredWidth = 0;
+            // 1. Prefer intrinsic image aspect ratio (immune to iframe layout delays)
+            if (firstCar.naturalWidth && firstCar.naturalHeight) {
+                measuredWidth = (firstCar.naturalWidth / firstCar.naturalHeight) * 45;
+            } else {
+                // 2. Fall back to bounding client rect only if non-zero
+                const rectWidth = firstCar.getBoundingClientRect().width;
+                if (rectWidth > 0) {
+                    measuredWidth = rectWidth;
+                }
+            }
+
+            if (measuredWidth > 0) {
+                const computedMargin = parseFloat(window.getComputedStyle(firstCar).marginRight) || -15;
+                const newWidth = measuredWidth + computedMargin;
+                // Only update if we get a sane, positive dimension
+                if (newWidth > 50) {
+                    carWidth = newWidth;
+                }
             }
         }
 
         const firstImage = trainWrapper.querySelector('img');
-        if (firstImage.complete) {
-            measureCarWidth();
-        } else {
+        if (firstImage) {
+            if (firstImage.complete) {
+                measureCarWidth();
+            }
             firstImage.addEventListener('load', measureCarWidth);
         }
+        window.addEventListener('load', measureCarWidth);
+        window.addEventListener('resize', measureCarWidth);
 
         let trainX = -carWidth * 2; 
         let bikeX = 200; 
@@ -243,9 +264,9 @@
         let bikeVelocity = 33;
 
         function updateSliderFill(slider) {
-            const min = parseInt(slider.min);
-            const max = parseInt(slider.max);
-            const val = parseInt(slider.value);
+            const min = parseInt(slider.min, 10);
+            const max = parseInt(slider.max, 10);
+            const val = parseInt(slider.value, 10);
             const percentage = ((val - min) / (max - min)) * 100;
             const fillColor = slider.id === 'trainSlider' ? '#0070f3' : '#10b981';
             slider.style.background = `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${percentage}%, #e2e8f0 ${percentage}%, #e2e8f0 100%)`;
@@ -281,10 +302,14 @@
             const trainStep = MAX_SPEED_STEP * (trainVelocity / 100);
             trainX += trainStep;
 
-            if (trainX >= -carWidth) {
-                trainX -= carWidth;
-            } else if (trainX <= -carWidth * 2) {
-                trainX += carWidth;
+            // Safe loop reset: always normalizes trainX within [-2*carWidth, -carWidth]
+            if (carWidth > 50) {
+                while (trainX >= -carWidth) {
+                    trainX -= carWidth;
+                }
+                while (trainX <= -carWidth * 2) {
+                    trainX += carWidth;
+                }
             }
             
             trainWrapper.style.transform = `translateX(${trainX}px)`;
@@ -311,6 +336,5 @@
         updateSliderFill(bikeSlider);
         requestAnimationFrame(updateSimulation);
     </script>
-
 </body>
 </html>
